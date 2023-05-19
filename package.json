@@ -16,7 +16,7 @@
         "nodemon": "^2.0.22"
     },
     "scripts": {
-        "test": "mocha --require @babel/register --reporter min tests.js",
+        "test": "mocha --require @babel/register --reporter ./customReporter.js tests.js",
         "start": "nodemon --exec babel-node index.js",
         "test:watch": "nodemon --exec 'yarn test'"
     }
