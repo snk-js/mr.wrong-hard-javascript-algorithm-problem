@@ -139,9 +139,10 @@ export default function findOutMrWrong(conversation) {
 
   const possiblePermutations = Object.entries(subjectiveArgs).reduce((acc, [name, args]) => {
     const states = args.map(arg => possibleStates(arg, size));
-    return states.reduce((acc, state2) => {
+    acc[name] = states.reduce((acc, state2) => {
       return mergeStates(acc, state2);
-    }, [states.shift()]);
+    }, states.shift());
+    return acc;
   }, {})
 
   console.log(possiblePermutations);
