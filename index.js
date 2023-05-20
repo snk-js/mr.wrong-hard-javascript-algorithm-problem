@@ -53,116 +53,97 @@ export default function findOutMrWrong(conversation) {
     }).filter((n) => n !== null && n !== undefined)))]
   }))
 
-  console.log(resultsFromArgumentsMap);
+  const collectArgsByType = (argsList, type) => {
+    return Object.fromEntries(Object.entries(argsList)
+      .map(([name, args]) => {
+        return [
+          name,
+          args.filter(arg => {
+            if (Array.isArray(arg)) {
+              return arg.every(item => typeof item === type);
+            } else {
+              return typeof arg === type;
+            }
+          }),
+        ];
+      })
+      .filter(([name, args]) => args.length > 0));
+  };
 
-  // the result of the disired data structure to solve the problem is done
-  // {
-  //   Dowfls: [ 3 ], 
-  //   Ljiyxbmr: [ 1 ],
-  //   Cvvugb: [ 2 ],
-  //   Tzjlvruhk: [ [ 'Tzjlvruhk', 'Dowfls.' ], 2 ]
-  // }
+  const subjectiveArgs = collectArgsByType(resultsFromArgumentsMap, 'string')
 
-  // where the array of indexs are the possible 
-  // positions of the names in the queue
+  const objectiveArgs = collectArgsByType(resultsFromArgumentsMap, 'number')
 
-  // where the array of names are the possible pair
-  // of names that should match one or more specific 
-  // position of the queue
 
-  // now to solve this problem we need to think proceduraly:
+  function possibleStates(pair, size) {
+    const positions = Array(size).fill(null);
+    const results = [];
 
-  // suppose there's A, B and C agents in the queue
-  // so the size of the queue is n = 3;
-  // in order to find one mr. wrong (because may have been more than one)
-  // we need to pick one of the agents and verify if the other agents
-  // if n - 1 agents to be truthy altogether and the picked agent to be falsy
-  // then the picked agent is the mr. wrong
-  // -------------------------------
+    for (let i = 0; i < size - 1; i++) {
+      const state = [...positions];
+      state[i] = pair[0];
+      state[i + 1] = pair[1];
+      results.push(state);
+    }
 
-  // edge cases and special conditions:
-  // 1. a agent is truthy if none of it's arguments are falsy
+    return results;
+  }
 
-  // 2. a agent can have 0 or more arguments
+  function mergeStates(states1, states2) {
+    const merged = [];
 
-  // 3. a agent can have 0 or more possible truthy permutations in a given argument
+    for (const state1 of states1) {
+      for (const state2 of states2) {
+        const mergedState = mergeTwoStates(state1, state2);
+        if (mergedState) {
+          merged.push(mergedState);
+        }
+      }
+    }
 
-  // 4. an argument is falsy if it doesn't match to all the arguments of the other agents altogether
+    return merged;
+  }
 
-  // 5. an argument with more then 1 possible truthy permutations is truthy if one of the permutations is truthy
-  // compared to all arguments of the other agents altogether
+  function mergeTwoStates(state1, state2) {
+    const mergedState = [];
+    const names = new Set();
 
-  // 6. to assert if a agent is possible mr. wrong
-  // 6.1 we need to pick this agent
-  // 6.2 firstly mount the truthy permutations of the arguments of the other agents
-  // mostly will be 1 way to be truthy
-  // 6.3 if picked agent has none truthy arguments against the all 
-  // truthy permutations of the other agents then the picked agent is the mr. wrong
-  // 7. a result is a agent if one and only one agent is mr. wrong
-  // 8. if there's more then one mr. wrong then the result is inconclusive
-  // 9. if there's no mr. wrong then the result is inconclusive
+    for (let i = 0; i < state1.length; i++) {
+      if (state1[i] === null && state2[i] === null) {
+        mergedState.push(null);
+      } else if (state1[i] === null) {
+        if (names.has(state2[i])) {
+          return null; // conflict: name already exists in the mergedState
+        }
+        mergedState.push(state2[i]);
+        names.add(state2[i]);
+      } else if (state2[i] === null) {
+        if (names.has(state1[i])) {
+          return null; // conflict: name already exists in the mergedState
+        }
+        mergedState.push(state1[i]);
+        names.add(state1[i]);
+      } else if (state1[i] === state2[i]) {
+        if (names.has(state1[i])) {
+          return null; // conflict: name already exists in the mergedState
+        }
+        mergedState.push(state1[i]);
+        names.add(state1[i]);
+      } else {
+        return null; // conflict: cannot merge
+      }
+    }
 
-  // example: 
-  // {
-  //   Dowfls: [ 3 ], 
-  //   Ljiyxbmr: [ 1 ],
-  //   Cvvugb: [ 2 ],
-  //   Tzjlvruhk: [ [ 'Tzjlvruhk', 'Dowfls.' ], 2 ]
-  // }
+    return mergedState;
+  }
 
-  // Dowfls =    0
-  // Ljiyxbmr =  1
-  // Cvvugb =    2
-  // Tzjlvruhk = 3
+  const possiblePermutations = Object.entries(subjectiveArgs).reduce((acc, [name, args]) => {
+    const states = args.map(arg => possibleStates(arg, size));
+    return states.reduce((acc, state2) => {
+      return mergeStates(acc, state2);
+    }, [states.shift()]);
+  }, {})
 
-  // enum possibleAgents = {0, 1, 2, 3}: x
+  console.log(possiblePermutations);
 
-  // now we visualize possible truthy permutations of the arguments of the other agents: 
-  // to agent 0: [x, x, x, 0];
-  // to agent 1: [x, 1, x, x];
-  // to agent 2: [x, x, 2, x];
-  // to agent 3: [
-  // -------------- 1st argument ----------------
-  //   [x, x, 3, x] due to his argument being at 3rd position
-  // -------------- 2nd argument ----------------
-  //   [3, 0, x, x] due to his argument of always being in front of Dowfls (1)
-  //   [x, 3, 0, x] due to his argument of always being in front of Dowfls (2)
-  //   [x, x, 3, 0] due to his argument of always being in front of Dowfls (3)
-  // --------------------------------------------
-  // ]
-
-  // if we pick agent, he has 2 arguments, one which is static and the other is dynamic
-  // which means that for that dynamic argument being truthy, one of the 3 possible permutations
-  // must be truthy
-
-  // in order for agent 3 to be mr. wrong:
-  // 1. he must not be in front of Dowfls in any situtation
-  // OR
-  // 2. he must not be at the 3rd position of the queue in any situation
-
-  // 6.2 following a truthy version of the queue except the picked agent: 
-  // [x, 1, 2, 0]
-  // 6.3 if picked agent has none truthy arguments against the all:
-  //  [x, x, 3, x] // false ( doesn't match )
-  //  [3, 0, x, x] // false ( doesn't match )
-  //  [x, 3, 0, x] // false ( doesn't match )
-  //  [x, x, 3, 0] // false ( doesn't match )
-  // then the picked agent is the mr. wrong
-
-  // BUT, this is not the definitive answer
-  // because we need to check if all other 
-  // picked agents isolatedly wouldn't be mr. wrong
-  // in that same example, if we pick agent 2, we would have:
-
-  // 0. [x, x, x, 0]
-  // 1. [x, 1, x, x]
-  // 3. [
-  // -------------- 1st argument ----------------
-  // [x, x, 3, x], // true
-  // -------------- 2nd argument ----------------
-  // [3, 0, x, x], // false
-  // [x, 3, 0, x], // false
-  // [x, x, 3, 0], // true
-  // --------------------------------------------
-  // ]
 }

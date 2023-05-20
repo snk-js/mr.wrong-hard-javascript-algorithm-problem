@@ -2,6 +2,7 @@ import findOutMrWrong from "./index.js";
 const chai = require("chai");
 const assert = chai.assert;
 
+
 describe("Tests", () => {
   it('Conversation 1', () => {
     const conversation = [
