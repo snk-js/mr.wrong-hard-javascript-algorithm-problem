@@ -48,7 +48,7 @@ const conversation=[
 "Peter:The man behind me is Tom."
 ]
 findOutMrWrong(conversation) should return null
-```
+
 
 Two solutions are possible in the last example: 1) Peter is Mr.Wrong and the order is Tom, John, Peter; 2) Tom is Mr.Wrong and the order is John, Peter, Tom. In this case, the result is null.
 
@@ -174,3 +174,4 @@ on line 56
 // so agent 2 is mr. wrong
 
 // finally, there's more then one mr. wrong, so the result is inconclusive (null as result)
+```
