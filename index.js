@@ -12,14 +12,18 @@ export default function findOutMrWrong(conversation) {
 
   const names = new Set()
 
+
   conversation.map((s) => {
     const [name, statement] = s.split(":")
     names.add(name);
     if (!state[name]) state[name] = [];
     const info = statement.split('me is ')[1] || Number(statement.match(/\d+/g)[0])
 
+    const nameFormated = typeof info === 'string' && info.replace('.', '')
+
     infos.map((i, idx) => {
-      statement.includes(i) && (state[name][idx] = info)
+      if (typeof i === 'string') (i = i.replace('.', ''))
+      statement.includes(i) && (state[name][idx] = nameFormated || info)
     })
   })
 
@@ -70,10 +74,17 @@ export default function findOutMrWrong(conversation) {
       .filter(([name, args]) => args.length > 0));
   };
 
+
+  const objectiveArgs = Object.fromEntries(
+    Object.entries(collectArgsByType(resultsFromArgumentsMap, 'number')).map(([name, positionArr]) => {
+      let position = positionArr[0];
+      let arr = Array(size).fill(null); // Assuming the length is always 3
+      arr[position] = name;
+      return [name, arr];
+    })
+  );
+
   const subjectiveArgs = collectArgsByType(resultsFromArgumentsMap, 'string')
-
-  const objectiveArgs = collectArgsByType(resultsFromArgumentsMap, 'number')
-
 
   function possibleStates(pair, size) {
     const positions = Array(size).fill(null);
@@ -137,14 +148,89 @@ export default function findOutMrWrong(conversation) {
     return mergedState;
   }
 
-  const possiblePermutations = Object.entries(subjectiveArgs).reduce((acc, [name, args]) => {
+  const possiblePermutations = Object.entries(Object.entries(subjectiveArgs).reduce((acc, [name, args]) => {
     const states = args.map(arg => possibleStates(arg, size));
     acc[name] = states.reduce((acc, state2) => {
       return mergeStates(acc, state2);
     }, states.shift());
     return acc;
-  }, {})
+  }, {}))
 
-  console.log(possiblePermutations);
 
+
+  const subjectiveMergedWithObjectiveArgs = possiblePermutations.map(([name, args]) => {
+    if (objectiveArgs[name]) args = args.map(arg => mergeQueuePossibility(arg, objectiveArgs[name])).filter(Boolean);
+    return [name, args]
+  })
+
+  const mutableObject = Object.fromEntries(subjectiveMergedWithObjectiveArgs);
+  const keys = Object.keys(mutableObject);
+
+  const dynamicArgsMatchBetweenAgents = () => {
+    let i = 0;
+    let k = 0;
+    let l = 0;
+    let entrie = []
+    const truthy = {}
+
+    const getRestArguments = () => Object.entries(mutableObject);
+
+    agent: while ((entrie = extract(mutableObject, keys[i]))) {
+      const [name, values] = entrie;
+      truthy[name] = [];
+      agentArg: for (const imaginaryQeuePossibility of values) {
+        restArgs: for (const [argOwner, args] of getRestArguments()) {
+          for (const arg of args) {
+            console.log(name + k, argOwner + l, mergeQueuePossibility(imaginaryQeuePossibility, arg))
+            l = (l + 1) % args.length
+          }
+        }
+        k = (k + 1) % values.length
+      }
+      i++
+    }
+    return truthy
+  }
+
+  console.log(dynamicArgsMatchBetweenAgents());
+
+}
+
+// Merge two states and return the merged state
+function mergeQueuePossibility(state1, state2) {
+  const mergedState = Array(state1.length).fill(null);  // initialize with null values
+  let names = new Set();
+
+  for (let i = 0; i < state1.length; i++) {
+    if (state1[i] !== null && state2[i] !== null) {
+      if (state1[i] !== state2[i]) {
+        return null;
+      } else {
+        mergedState[i] = state1[i];
+      }
+    } else if (state1[i] !== null) {
+      mergedState[i] = state1[i];
+    } else if (state2[i] !== null) {
+      mergedState[i] = state2[i];
+    }
+
+    if (mergedState[i]) {
+      if (names.has(mergedState[i])) {
+        return null; // Names repeated in the merged state
+      } else {
+        names.add(mergedState[i]);
+      }
+    }
+  }
+
+  return mergedState;
+}
+
+// extract the key from the object and return the key and the value
+function extract(obj, key) {
+  if (obj.hasOwnProperty(key)) {
+    const value = obj[key];
+    delete obj[key];
+    return [key, value];
+  }
 }
