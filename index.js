@@ -78,7 +78,7 @@ export default function findOutMrWrong(conversation) {
   const objectiveArgs = Object.fromEntries(
     Object.entries(collectArgsByType(resultsFromArgumentsMap, 'number')).map(([name, positionArr]) => {
       let position = positionArr[0];
-      let arr = Array(size).fill(null); // Assuming the length is always 3
+      let arr = Array(size).fill(null);
       arr[position] = name;
       return [name, arr];
     })
@@ -157,9 +157,18 @@ export default function findOutMrWrong(conversation) {
   }, {}))
 
 
+  const permutationsObj = Object.fromEntries(possiblePermutations)
+
+  Object.entries(objectiveArgs).forEach(([name, args]) => {
+    if (!permutationsObj[name]) {
+      possiblePermutations.push([name, [args]])
+    }
+  })
 
   const subjectiveMergedWithObjectiveArgs = possiblePermutations.map(([name, args]) => {
     if (objectiveArgs[name]) args = args.map(arg => mergeQueuePossibility(arg, objectiveArgs[name])).filter(Boolean);
+
+
     return [name, args]
   })
 
@@ -173,15 +182,18 @@ export default function findOutMrWrong(conversation) {
     let entrie = []
     const truthy = {}
 
+    // console.log(Object.fromEntries(subjectiveMergedWithObjectiveArgs));
+
     const getRestArguments = () => Object.entries(mutableObject);
 
     agent: while ((entrie = extract(mutableObject, keys[i]))) {
       const [name, values] = entrie;
-      truthy[name] = [];
       agentArg: for (const imaginaryQeuePossibility of values) {
         restArgs: for (const [argOwner, args] of getRestArguments()) {
           for (const arg of args) {
-            console.log(name + k, argOwner + l, mergeQueuePossibility(imaginaryQeuePossibility, arg))
+            if (!truthy[name + '-' + argOwner]) truthy[name + '-' + argOwner] = [];
+            const mergedState = mergeQueuePossibility(imaginaryQeuePossibility, arg)
+            mergedState && truthy[name + '-' + argOwner].push(mergedState);
             l = (l + 1) % args.length
           }
         }
