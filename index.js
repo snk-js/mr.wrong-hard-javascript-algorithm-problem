@@ -2,39 +2,139 @@ export default function findOutMrWrong(conversation) {
     const { state, people, queue, size } = extractInfos(conversation);
     const info = classifiedInfo(size);
     const mappedPropositionByName = classifyPropositionByName(state, size, info);
-    const objectiveArgs = mountPossibleQueues(mappedPropositionByName, size);
-    const subjectiveArgs = collectArgsByType(mappedPropositionByName, "string");
-    const queuePermutations = possiblePermutations(size, queue, subjectiveArgs);
+    const peoplePositions = peopleCurrentPositionsInTheQueue(mappedPropositionByName, size);
+    const nameWindowsByNames = nameWindows(mappedPropositionByName, "string");
+    const queuePermutations = possiblePermutations(size, queue, nameWindowsByNames);
     const permutationsObj = Object.fromEntries(queuePermutations);
-    updateQueuePermuts(objectiveArgs, permutationsObj, queuePermutations);
-    const possibleQueues = subjectiveMergedWithObjectiveArgs(queuePermutations, objectiveArgs);
-    const subjectiveAssumptions = Object.fromEntries(possibleQueues);
-    const allTruthyPossibilities = dynamicArgsMatchBetweenAgents(subjectiveAssumptions);
-    const result = findLiar(allTruthyPossibilities, people);
-    return result;
+    const entries = Object.entries(permutationsObj);
+    if (entries.length === 1 && !entries[0][1].length) return entries[0][0];
+    updateQueuePermuts(peoplePositions, permutationsObj, queuePermutations);
+    const possibleQueues = subjectiveMergedWithpeoplePositions(queuePermutations, peoplePositions);
+    const result = mergeAll(possibleQueues, people);
+
+    if (Object.values(result).flat().length === 1) {
+        for (let [name, queue] of Object.entries(result)) {
+            if (!queue.length) continue;
+            if (queue.length && queue[0].length && queue[0].length === size) return name;
+        }
+    }
+    // console.log(result);
+    return specialLiar(result) || specialLiar2(result) || null;
 }
 
-const dynamicArgsMatchBetweenAgents = (mutableObject) => {
-    const keys = Object.keys(mutableObject);
-    let i = 0;
-    let entrie = [];
-    const truthy = {};
+function specialLiar2(obj) {
+    let counter = 0;
+    let specialOne = null;
 
-    const getRestArguments = () => Object.entries(mutableObject);
+    for (let person in obj) {
+        const firstArray = obj[person][0];
 
-    agent: while ((entrie = extract(mutableObject, keys[i]))) {
-        const [name, values] = entrie;
-        agentArg: for (const imaginaryQeuePossibility of values) {
-            restArgs: for (const [argOwner, args] of getRestArguments()) {
-                for (const arg of args) {
-                    if (!truthy[name + "-" + argOwner]) truthy[name + "-" + argOwner] = [];
-                    const mergedState = mergeQueuePossibility(imaginaryQeuePossibility, arg);
-                    mergedState && truthy[name + "-" + argOwner].push(mergedState);
+        if (firstArray && !firstArray.includes(null)) {
+            specialOne = person;
+            counter++;
+        }
+    }
+
+    return counter === 1 ? specialOne : null;
+}
+
+function specialLiar(possibleQueuesByName) {
+    let candidates = [];
+    let fullQueuePerson = null;
+
+    for (let person in possibleQueuesByName) {
+        if (
+            Array.isArray(possibleQueuesByName[person]) &&
+            possibleQueuesByName[person].length > 1
+        ) {
+            let hasNull = possibleQueuesByName[person].some((arr) => arr.includes(null));
+            let isFull = possibleQueuesByName[person].some((arr) => !arr.includes(null));
+
+            if (hasNull) {
+                candidates.push(person);
+            }
+
+            if (isFull) {
+                if (fullQueuePerson === null) {
+                    fullQueuePerson = person;
+                } else {
+                    return null;
                 }
             }
+        } else {
         }
-        i++;
     }
+
+    if (candidates.length === 1) {
+        const uniqueSolutions = Object.entries(possibleQueuesByName).filter(([name, queues]) => {
+            return queues.length === 1;
+        });
+
+        if (uniqueSolutions.length === 1) {
+            if (uniqueSolutions[0][1].every((arr) => !arr.includes(null))) {
+                return uniqueSolutions[0][0];
+            }
+        }
+
+        return candidates[0];
+    }
+
+    if (candidates.length > 1 && fullQueuePerson) {
+        return fullQueuePerson;
+    }
+
+    return null;
+}
+
+const mergeAll = (possibleQueues, people) => {
+    const result = {};
+    for (let i = 0; i < people.length; i++) {
+        let possibleQueueClone = Object.fromEntries([...possibleQueues]);
+        delete possibleQueueClone[people[i]];
+        possibleQueueClone = Object.entries(possibleQueueClone);
+
+        let mergedState = Object.fromEntries([possibleQueueClone.pop()]);
+
+        for (const [name, possibleQueues] of possibleQueueClone) {
+            mergedState = mergeQueueObject({
+                ...mergedState,
+                [name]: possibleQueues,
+            });
+        }
+
+        result[people[i]] = Object.values(mergedState)[0];
+    }
+    return result;
+};
+
+const mergeQueueObject = (mutableObject) => {
+    const keys = Object.keys(mutableObject);
+    const truthy = {};
+    const cache = new Set(); // Cache to store evaluated pairs
+
+    for (const key of keys) {
+        if (!mutableObject.hasOwnProperty(key)) continue;
+        const nameValues = mutableObject[key];
+
+        for (const [argOwner, args] of Object.entries(mutableObject)) {
+            if (argOwner === key) continue; // Skip the same owner
+
+            const pairName = `${key}-${argOwner}`;
+            if (cache.has(pairName) || cache.has(`${argOwner}-${key}`)) continue; // Skip if pair already evaluated
+
+            truthy[pairName] = [];
+
+            for (const nv of nameValues) {
+                for (const arg of args) {
+                    const mergedState = mergeQueuePossibility(nv, arg);
+                    mergedState && truthy[pairName].push(mergedState);
+                }
+            }
+
+            cache.add(pairName);
+        }
+    }
+
     return truthy;
 };
 
@@ -68,17 +168,18 @@ function mergeQueuePossibility(state1, state2) {
     return mergedState;
 }
 
-// extract the key from the object and return the key and the value
-function extract(obj, key) {
-    if (obj.hasOwnProperty(key)) {
-        const value = obj[key];
-        delete obj[key];
-        return [key, value];
+function removePersonFromObj(obj, keyContaning) {
+    const clone = { ...obj };
+    for (const key in obj) {
+        if (key.includes(keyContaning)) {
+            delete clone[key];
+        }
     }
+
+    return clone;
 }
 
 function findLiar(allTruthyPossibilities, people) {
-    console.log(allTruthyPossibilities);
     let candidates = [];
 
     for (let person of people) {
@@ -103,9 +204,14 @@ function findLiar(allTruthyPossibilities, people) {
         return candidates[0];
     } else {
         console.log(`Inconclusive. Possible liars: ${candidates.join(", ")}`);
+        // if all in people are candidates, then return candidates
+        if (candidates.length === people.length) {
+            return candidates;
+        }
         return null;
     }
 }
+
 const extractInfos = (c) => {
     const state = {};
     const names = new Set();
@@ -171,7 +277,7 @@ const classifyPropositionByName = (state, size, info) =>
         })
     );
 
-const collectArgsByType = (argsList, type) => {
+const nameWindows = (argsList, type) => {
     return Object.fromEntries(
         Object.entries(argsList)
             .map(([name, args]) => {
@@ -190,9 +296,9 @@ const collectArgsByType = (argsList, type) => {
     );
 };
 
-const mountPossibleQueues = (mappedPropositionByName, size) =>
+const peopleCurrentPositionsInTheQueue = (mappedPropositionByName, size) =>
     Object.fromEntries(
-        Object.entries(collectArgsByType(mappedPropositionByName, "number")).map(
+        Object.entries(nameWindows(mappedPropositionByName, "number")).map(
             ([name, positionArr]) => {
                 let position = positionArr[0];
                 let arr = Array(size).fill(null);
@@ -275,19 +381,19 @@ const possiblePermutations = (size, state, subjectiveArgs) =>
         }, {})
     );
 
-const updateQueuePermuts = (objectiveArgs, permutationsObj, queuePermutations) => {
-    Object.entries(objectiveArgs).forEach(([name, args]) => {
+const updateQueuePermuts = (peoplePositions, permutationsObj, queuePermutations) => {
+    Object.entries(peoplePositions).forEach(([name, args]) => {
         if (!permutationsObj[name]) {
             queuePermutations.push([name, [args]]);
         }
     });
 };
 
-const subjectiveMergedWithObjectiveArgs = (queuePermutations, objectiveArgs) =>
+const subjectiveMergedWithpeoplePositions = (queuePermutations, peoplePositions) =>
     queuePermutations.map(([name, args]) => {
-        if (objectiveArgs[name])
+        if (peoplePositions[name])
             args = args
-                .map((arg) => mergeQueuePossibility(arg, objectiveArgs[name]))
+                .map((arg) => mergeQueuePossibility(arg, peoplePositions[name]))
                 .filter(Boolean);
         return [name, args];
     });
